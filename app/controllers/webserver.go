@@ -5,24 +5,18 @@ import (
 	"fmt"
 	"go-trading/config"
 	"html/template"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
 
-	"github.com/labstack/gommon/log"
-
 	"go-trading/app/models"
 )
 
-var templates = template.Must(template.ParseFiles("app/views/google.html"))
+var templates = template.Must(template.ParseFiles("app/views/chart.html"))
 
 func viewChartHandler(w http.ResponseWriter, r *http.Request) {
-	limit := 100
-	duration := "1s"
-	durationTime := config.Config.Durations[duration]
-	df, _ := models.GetAllCandle(config.Config.ProductCode, durationTime, limit)
-
-	err := templates.ExecuteTemplate(w, "google.html", df.Candles)
+	err := templates.ExecuteTemplate(w, "chart.html", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -30,7 +24,7 @@ func viewChartHandler(w http.ResponseWriter, r *http.Request) {
 
 type JSONError struct {
 	Error string `json:"error"`
-	Code  int    `json:""`
+	Code  int    `json:"code"`
 }
 
 func APIError(w http.ResponseWriter, errMessage string, code int) {
@@ -44,6 +38,7 @@ func APIError(w http.ResponseWriter, errMessage string, code int) {
 }
 
 var apiValidPath = regexp.MustCompile("^/api/candle/$")
+
 func apiMakeHandler(fn func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m := apiValidPath.FindStringSubmatch(r.URL.Path)

@@ -38,10 +38,10 @@ func (api APIClient) header(method, endpoint string, body []byte) map[string]str
 	mac.Write([]byte(message))
 	sign := hex.EncodeToString(mac.Sum(nil))
 	return map[string]string {
-		"ACCESS-KEY": api.key,
+		"ACCESS-KEY":       api.key,
 		"ACCESS-TIMESTAMP": timestamp,
-		"ACCESS-SIGN": sign,
-		"Content-Type": "application/json",
+		"ACCESS-SIGN":      sign,
+		"Content-Type":     "application/json",
 	}
 }
 
@@ -82,9 +82,9 @@ func (api *APIClient) doRequest(method, urlPath string, query map[string]string,
 }
 
 type Balance struct {
-	CurrentCode string `json:"currency_code"`
-	Amount float64 `json:"amount"`
-	Available float64 `json:"available"`
+	CurrentCode string  `json:"currency_code"`
+	Amount      float64 `json:"amount"`
+	Available   float64 `json:"available"`
 }
 
 func (api *APIClient) GetBalance() ([]Balance, error) {
@@ -150,11 +150,11 @@ func (api *APIClient) GetTicker(productCode string) (*Ticker, error) {
 }
 
 type JsonRPC2 struct {
-    Version string      `json:"jsonrpc"`
-    Method  string      `json:"method"`
-    Params  interface{} `json:"params"`
-    Result  interface{} `json:"result,omitempty"`
-    Id      *int        `json:"id,omitempty"`
+	Version string      `json:"jsonrpc"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
+	Result  interface{} `json:"result,omitempty"`
+	Id      *int        `json:"id,omitempty"`
 }
 
 type SubscribeParams struct {
@@ -177,31 +177,91 @@ func (api *APIClient) GetRealTimeTicker(symbol string, ch chan<- Ticker) {
 		return
 	}
 
-	OUTER:
-		for {
-			message := new(JsonRPC2)
-			if err := c.ReadJSON(message); err != nil {
-				log.Println("read:", err)
-				return
-			}
+OUTER:
+	for {
+		message := new(JsonRPC2)
+		if err := c.ReadJSON(message); err != nil {
+			log.Println("read:", err)
+			return
+		}
 
-			if message.Method == "channelMessage" {
-				switch v := message.Params.(type) {
-				case map[string]interface{}:
-					for key, binary := range v {
-						if key == "message" {
-							marshaTic, err := json.Marshal(binary)
-							if err != nil {
-								continue OUTER
-							}
-							var ticker Ticker
-							if err := json.Unmarshal(marshaTic, &ticker); err != nil {
-								continue OUTER
-							}
-							ch <- ticker
+		if message.Method == "channelMessage" {
+			switch v := message.Params.(type) {
+			case map[string]interface{}:
+				for key, binary := range v {
+					if key == "message" {
+						marshaTic, err := json.Marshal(binary)
+						if err != nil {
+							continue OUTER
 						}
+						var ticker Ticker
+						if err := json.Unmarshal(marshaTic, &ticker); err != nil {
+							continue OUTER
+						}
+						ch <- ticker
 					}
 				}
 			}
 		}
+	}
+}
+
+type Order struct {
+	ID                     int     `json:"id"`
+	ChildOrderAcceptanceID string  `json:"child_order_acceptance_id"`
+	ProductCode            string  `json:"product_code"`
+	ChildOrderType         string  `json:"child_order_type"`
+	Side                   string  `json:"side"`
+	Price                  float64 `json:"price"`
+	Size                   float64 `json:"size"`
+	MinuteToExpires        int     `json:"minute_to_expire"`
+	TimeInForce            string  `json:"time_in_force"`
+	Status                 string  `json:"status"`
+	ErrorMessage           string  `json:"error_message"`
+	AveragePrice           float64 `json:"average_price"`
+	ChildOrderState        string  `json:"child_order_state"`
+	ExpireDate             string  `json:"expire_date"`
+	ChildOrderDate         string  `json:"child_order_date"`
+	OutstandingSize        float64 `json:"outstanding_size"`
+	CancelSize             float64 `json:"cancel_size"`
+	ExecutedSize           float64 `json:"executed_size"`
+	TotalCommission        float64 `json:"total_commission"`
+	Count                  int     `json:"count"`
+	Before                 int     `json:"before"`
+	After                  int     `json:"after"`
+}
+
+type ResponseSendChildOrder struct {
+	ChildOrderAcceptanceID string `json:"child_order_acceptance_id"`
+}
+
+func (api *APIClient) SendOrder(order *Order) (*ResponseSendChildOrder, error) {
+	data, err := json.Marshal(order)
+	if err != nil {
+		return nil, err
+	}
+	url := "me/sendchildorder"
+	resp, err := api.doRequest("POST", url, map[string]string{}, data)
+	if err != nil {
+		return nil, err
+	}
+	var response ResponseSendChildOrder
+	err = json.Unmarshal(resp, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func (api *APIClient) ListOrder(query map[string]string) ([]Order, error) {
+	resp, err := api.doRequest("GET", "me/getchildorders", query, nil)
+	if err != nil {
+		return nil, err
+	}
+	var responseListOrder []Order
+	err = json.Unmarshal(resp, &responseListOrder)
+	if err != nil {
+		return nil, err
+	}
+	return responseListOrder, nil
 }
